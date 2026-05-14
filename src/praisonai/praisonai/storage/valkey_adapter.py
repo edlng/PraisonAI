@@ -9,11 +9,7 @@ import json
 import struct
 from typing import Dict, Any, List, Optional
 
-try:
-    from glide_sync import GlideClient as GlideClientSync, GlideClientConfiguration, NodeAddress, ServerCredentials
-except ImportError:
-    GlideClientSync = None
-    GlideClientConfiguration = NodeAddress = ServerCredentials = None
+from praisonai.persistence._valkey_client import create_valkey_client
 
 try:
     from glide_sync import ExpirySet, ExpiryType
@@ -33,17 +29,6 @@ except ImportError:
     VectorField = VectorFieldAttributesHnsw = VectorAlgorithm = None
     DistanceMetricType = VectorType = FtCreateOptions = DataType = None
     FtSearchOptions = ReturnField = None
-
-
-_MISSING_MSG = (
-    "Valkey storage requires the 'valkey-glide-sync' package. "
-    "Install with: pip install 'praisonai[valkey]'"
-)
-
-
-def _check_glide():
-    if GlideClientSync is None:
-        raise ImportError(_MISSING_MSG)
 
 
 class ValkeyStorageAdapter:
@@ -91,11 +76,11 @@ class ValkeyStorageAdapter:
     def _get_client(self):
         """Lazy initialize Valkey client."""
         if self._client is None:
-            _check_glide()
-            addresses = [NodeAddress(self.host, self.port)]
-            creds = ServerCredentials(password=self.password) if self.password else None
-            config = GlideClientConfiguration(addresses=addresses, credentials=creds)
-            self._client = GlideClientSync.create(config)
+            self._client = create_valkey_client(
+                host=self.host,
+                port=self.port,
+                password=self.password,
+            )
         return self._client
 
     def _make_key(self, key: str) -> str:
@@ -111,7 +96,7 @@ class ValkeyStorageAdapter:
             result = client.scan(cursor, match=pattern, count=100)
             cursor = result[0]
             all_keys.extend(result[1] or [])
-            if cursor == b"0" or cursor == "0":
+            if not cursor or (cursor.decode() if isinstance(cursor, bytes) else str(cursor)) == "0":
                 break
         return all_keys
 
@@ -271,11 +256,11 @@ class ValkeySearchBackend:
     def _get_client(self):
         """Lazy initialize Valkey client."""
         if self._client is None:
-            _check_glide()
-            addresses = [NodeAddress(self.host, self.port)]
-            creds = ServerCredentials(password=self.password) if self.password else None
-            config = GlideClientConfiguration(addresses=addresses, credentials=creds)
-            self._client = GlideClientSync.create(config)
+            self._client = create_valkey_client(
+                host=self.host,
+                port=self.port,
+                password=self.password,
+            )
         return self._client
 
     def create_index(self, vector_dim: int = None) -> None:

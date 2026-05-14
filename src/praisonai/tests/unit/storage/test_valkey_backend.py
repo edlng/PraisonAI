@@ -167,7 +167,7 @@ class TestValkeyStorageAdapter:
 
     def test_valkey_adapter_import_error(self):
         """Test ImportError with 'valkey' hint when glide package is not available."""
-        import praisonai.storage.valkey_adapter as mod
+        import praisonai.persistence._valkey_client as client_mod
         from praisonai.storage.valkey_adapter import ValkeyStorageAdapter
 
         adapter = ValkeyStorageAdapter.__new__(ValkeyStorageAdapter)
@@ -178,16 +178,16 @@ class TestValkeyStorageAdapter:
         adapter.password = None
         adapter._client = None
 
-        original = mod.GlideClientSync
+        original = client_mod.GlideClientSync
         try:
-            mod.GlideClientSync = None
+            client_mod.GlideClientSync = None
             try:
                 adapter._get_client()
                 assert False, "Should have raised ImportError"
             except ImportError as e:
                 assert "valkey" in str(e).lower()
         finally:
-            mod.GlideClientSync = original
+            client_mod.GlideClientSync = original
 
     def test_valkey_adapter_operation_error(self):
         """Test RuntimeError raised when a client operation fails."""

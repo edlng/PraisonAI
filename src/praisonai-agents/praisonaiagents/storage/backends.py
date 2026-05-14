@@ -458,6 +458,4 @@ __all__ = [
     'FileBackend',
     'SQLiteBackend',
     'get_backend',
-    'ValkeyBackend',
-    'ValkeySearchBackend',
 ]

@@ -5,16 +5,12 @@ Requires: valkey-glide-sync
 Install: pip install 'praisonai[valkey]'
 """
 
+import re
 import struct
 from typing import Any, Dict, List, Optional
 
 from .base import KnowledgeStore, KnowledgeDocument, validate_identifier
-
-try:
-    from glide_sync import GlideClient as GlideClientSync, GlideClientConfiguration, NodeAddress, ServerCredentials
-except ImportError:
-    GlideClientSync = None
-    GlideClientConfiguration = NodeAddress = ServerCredentials = None
+from .._valkey_client import create_valkey_client
 
 try:
     from glide_sync import ft
@@ -30,6 +26,14 @@ except ImportError:
     TextField = NumericField = VectorField = VectorFieldAttributesHnsw = None
     VectorAlgorithm = DistanceMetricType = VectorType = None
     FtCreateOptions = DataType = FtSearchOptions = ReturnField = None
+
+
+_SEARCH_SPECIAL_RE = re.compile(r'([,.<>{}\[\]"\'\\:;!@#$%^&*()\-+=~?/| \t])')
+_FIELD_NAME_RE = re.compile(r'^[a-zA-Z0-9_]+$')
+
+
+def _escape_search_value(value: str) -> str:
+    return _SEARCH_SPECIAL_RE.sub(r'\\\1', str(value))
 
 
 def _decode(v) -> str:
@@ -65,15 +69,11 @@ class ValkeyVectorKnowledgeStore(KnowledgeStore):
     def _get_client(self):
         """Lazy initialize Valkey client."""
         if self._client is None:
-            if GlideClientSync is None:
-                raise ImportError(
-                    "valkey-glide-sync is required for Valkey Vector support. "
-                    "Install with: pip install 'praisonai[valkey]'"
-                )
-            addresses = [NodeAddress(self.host, self.port)]
-            creds = ServerCredentials(password=self.password) if self.password else None
-            config = GlideClientConfiguration(addresses=addresses, credentials=creds)
-            self._client = GlideClientSync.create(config)
+            self._client = create_valkey_client(
+                host=self.host,
+                port=self.port,
+                password=self.password,
+            )
         return self._client
 
     def _index_name(self, collection: str) -> str:
@@ -115,9 +115,22 @@ class ValkeyVectorKnowledgeStore(KnowledgeStore):
         index_name = self._index_name(name)
         try:
             ft.dropindex(client, index_name)
-            return True
         except Exception:
             return False
+
+        # Manually remove orphaned document hashes left behind (no DD flag in ValkeySearch)
+        pattern = f"{self.prefix}{name}:*"
+        cursor: bytes = b"0"
+        while True:
+            result = client.scan(cursor, match=pattern, count=100)
+            cursor = result[0]
+            keys = result[1] or []
+            if keys:
+                client.delete(keys)
+            if not cursor or _decode(cursor) == "0":
+                break
+
+        return True
 
     def collection_exists(self, name: str) -> bool:
         """Check if an index exists."""
@@ -214,8 +227,9 @@ class ValkeyVectorKnowledgeStore(KnowledgeStore):
         if filters:
             filter_parts = []
             for field, value in filters.items():
-                # Escape special chars in value for tag/text filter
-                escaped = str(value).replace("-", "\\-").replace(".", "\\.")
+                if not _FIELD_NAME_RE.match(field):
+                    raise ValueError(f"Invalid filter field name: {field!r}")
+                escaped = _escape_search_value(value)
                 filter_parts.append(f"@{field}:({escaped})")
             pre_filter = " ".join(filter_parts)
             query = f"({pre_filter})=>[KNN {limit} @embedding $vec AS score]"
@@ -329,11 +343,11 @@ class ValkeyVectorKnowledgeStore(KnowledgeStore):
         keys = [self._doc_key(collection, doc_id) for doc_id in ids]
 
         try:
-            client.delete(keys)
+            deleted = client.delete(keys)
         except Exception as e:
             raise RuntimeError(f"Failed to delete documents from Valkey: {e}") from e
 
-        return len(ids)
+        return deleted
 
     def count(self, collection: str) -> int:
         """Count documents in a collection."""

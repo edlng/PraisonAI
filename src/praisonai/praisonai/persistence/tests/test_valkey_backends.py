@@ -20,6 +20,10 @@ def _make_knowledge_store():
     from praisonai.persistence.knowledge.valkey_vector import ValkeyVectorKnowledgeStore
 
     store = ValkeyVectorKnowledgeStore.__new__(ValkeyVectorKnowledgeStore)
+    store.host = "localhost"
+    store.port = 6379
+    store.password = None
+    store.prefix = "praison:vec:"
     mock_client = MagicMock()
     store._client = mock_client
     store._get_client = lambda: mock_client
@@ -32,6 +36,11 @@ def _make_state_store():
     from praisonai.persistence.state.valkey import ValkeyStateStore
 
     store = ValkeyStateStore.__new__(ValkeyStateStore)
+    store.host = "localhost"
+    store.port = 6379
+    store.password = None
+    store.prefix = "praison:"
+    store.db = 0
     mock_client = MagicMock()
     store._client = mock_client
     store._get_client = lambda: mock_client

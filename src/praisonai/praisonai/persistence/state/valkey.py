@@ -9,12 +9,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from .base import StateStore
-
-try:
-    from glide_sync import GlideClient as GlideClientSync, GlideClientConfiguration, NodeAddress, ServerCredentials
-except ImportError:
-    GlideClientSync = None
-    GlideClientConfiguration = NodeAddress = ServerCredentials = None
+from .._valkey_client import create_valkey_client
 
 try:
     from glide_sync import ExpirySet, ExpiryType
@@ -52,19 +47,12 @@ class ValkeyStateStore(StateStore):
     def _get_client(self):
         """Lazy initialize Valkey client."""
         if self._client is None:
-            if GlideClientSync is None:
-                raise ImportError(
-                    "valkey-glide-sync is required for Valkey support. "
-                    "Install with: pip install 'praisonai[valkey]'"
-                )
-            addresses = [NodeAddress(self.host, self.port)]
-            creds = ServerCredentials(password=self.password) if self.password else None
-            config = GlideClientConfiguration(
-                addresses=addresses,
-                credentials=creds,
-                database_id=self.db,
+            self._client = create_valkey_client(
+                host=self.host,
+                port=self.port,
+                password=self.password,
+                db=self.db,
             )
-            self._client = GlideClientSync.create(config)
         return self._client
 
     def _key(self, key: str) -> str:
