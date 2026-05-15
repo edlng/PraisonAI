@@ -117,7 +117,7 @@ class ValkeyStateStore(StateStore):
                 result = client.scan(cursor, match=full_pattern, count=100)
                 cursor = result[0]
                 all_keys.extend(result[1] or [])
-                if cursor == b"0" or cursor == "0":
+                if not cursor or cursor in (b"0", "0"):
                     break
             prefix_len = len(self.prefix)
             result_keys = []

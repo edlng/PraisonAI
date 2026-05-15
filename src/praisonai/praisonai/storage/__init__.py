@@ -63,7 +63,6 @@ def _make_valkey_backend_class():
             prefix: str = None,
             ttl=None,
             password: str = None,
-            **kwargs,
         ):
             super().__init__(
                 host=host if host is not None else os.environ.get("VALKEY_HOST", "localhost"),

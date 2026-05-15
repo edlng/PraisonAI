@@ -107,7 +107,7 @@ class ValkeyStorageAdapter:
         json_data = json.dumps(data, default=str, ensure_ascii=False).encode('utf-8')
 
         try:
-            if self.ttl:
+            if self.ttl is not None:
                 client.set(full_key, json_data, expiry=ExpirySet(ExpiryType.SEC, self.ttl))
             else:
                 client.set(full_key, json_data)

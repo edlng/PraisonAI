@@ -392,7 +392,7 @@ def get_backend(
     Factory function to get a storage backend.
     
     Args:
-        backend_type: Type of backend ("file", "sqlite", "redis", "mongodb", "postgresql", "dynamodb")
+        backend_type: Type of backend ("file", "sqlite", "redis", "mongodb", "postgresql", "dynamodb", "valkey")
         **kwargs: Backend-specific arguments
         
     Returns:
