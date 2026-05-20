@@ -573,9 +573,8 @@ class TestValkeyStateStore:
     def check_valkey(self):
         """Skip if Valkey not available."""
         try:
-            from glide_sync import GlideClient, GlideClientConfiguration, NodeAddress
-            config = GlideClientConfiguration(addresses=[NodeAddress("localhost", 6379)])
-            client = GlideClient.create(config)
+            from praisonai.persistence._valkey_client import create_valkey_client
+            client = create_valkey_client(host="localhost", port=6379)
             client.ping()
             client.close()
         except Exception:
@@ -662,6 +661,105 @@ class TestValkeyStateStore:
             for k in store3.keys():
                 store3.delete(k)
             store3.close()
+
+
+# ===========================================================================
+# 4b. Valkey Vector Search — ValkeyVectorKnowledgeStore against a live instance
+# ===========================================================================
+class TestValkeyVectorSearch:
+    """Valkey vector search: real operations against a live ValkeySearch instance."""
+
+    @pytest.fixture(autouse=True)
+    def check_valkey_search(self):
+        """Skip if Valkey is unreachable or ValkeySearch (FT.*) is not loaded."""
+        try:
+            from glide_sync import ft
+        except ImportError:
+            pytest.skip("valkey-glide-sync not installed")
+
+        try:
+            from praisonai.persistence._valkey_client import create_valkey_client
+        except ImportError as e:
+            pytest.skip(f"praisonai not importable: {e}")
+
+        client = None
+        try:
+            client = create_valkey_client(host="localhost", port=6379)
+            client.ping()
+        except Exception as e:
+            if client is not None:
+                client.close()
+            pytest.skip(f"Valkey not available on localhost:6379: {e}")
+
+        try:
+            # Probe FT.* support; raises if module not loaded
+            ft.list(client)
+        except Exception as e:
+            pytest.skip(f"ValkeySearch (FT.*) module not loaded on localhost:6379: {e}")
+        finally:
+            if client is not None:
+                client.close()
+
+    def test_valkey_vector_search_roundtrip(self):
+        """Full create → insert → search → delete_collection roundtrip."""
+        from praisonai.persistence.knowledge.valkey_vector import ValkeyVectorKnowledgeStore
+        from praisonai.persistence.knowledge.base import KnowledgeDocument
+
+        prefix = f"praisontest_{uuid.uuid4().hex[:6]}_"
+        collection = f"vec_{uuid.uuid4().hex[:6]}"
+        dimension = 4
+        store = ValkeyVectorKnowledgeStore(host="localhost", port=6379, prefix=prefix)
+
+        try:
+            # Create index
+            store.create_collection(collection, dimension=dimension, distance="cosine")
+            assert store.collection_exists(collection)
+
+            # Insert documents with simple, distinguishable embeddings
+            docs = [
+                KnowledgeDocument(
+                    id="doc_a",
+                    content="alpha document",
+                    embedding=[1.0, 0.0, 0.0, 0.0],
+                ),
+                KnowledgeDocument(
+                    id="doc_b",
+                    content="bravo document",
+                    embedding=[0.0, 1.0, 0.0, 0.0],
+                ),
+                KnowledgeDocument(
+                    id="doc_c",
+                    content="charlie document",
+                    embedding=[0.0, 0.0, 1.0, 0.0],
+                ),
+            ]
+            inserted = store.insert(collection, docs)
+            assert set(inserted) == {"doc_a", "doc_b", "doc_c"}
+
+            # Vector search: query closest to doc_a
+            results = store.search(collection, query_embedding=[1.0, 0.0, 0.0, 0.0], limit=2)
+            assert len(results) >= 1, "Expected at least one search result"
+            assert results[0].id == "doc_a", f"Expected doc_a as nearest neighbor, got {results[0].id}"
+            assert results[0].content == "alpha document"
+
+            # Verify the bare ID is returned (no prefix leakage)
+            for r in results:
+                assert ":" not in r.id or r.id in {"doc_a", "doc_b", "doc_c"}
+
+            # get() roundtrip
+            got = store.get(collection, ["doc_b"])
+            assert len(got) == 1
+            assert got[0].id == "doc_b"
+            assert got[0].content == "bravo document"
+
+            # Delete one doc
+            deleted = store.delete(collection, ids=["doc_c"])
+            assert deleted == 1
+        finally:
+            try:
+                store.delete_collection(collection)
+            finally:
+                store.close()
 
 
 # ===========================================================================
