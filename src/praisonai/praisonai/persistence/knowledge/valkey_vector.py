@@ -127,7 +127,7 @@ class ValkeyVectorKnowledgeStore(KnowledgeStore):
             keys = result[1] or []
             if keys:
                 client.delete(keys)
-            if not cursor or _decode(cursor) == "0":
+            if not cursor or cursor in (b"0", "0", 0):
                 break
 
         return True
@@ -229,6 +229,10 @@ class ValkeyVectorKnowledgeStore(KnowledgeStore):
             for field, value in filters.items():
                 if not _FIELD_NAME_RE.match(field):
                     raise ValueError(f"Invalid filter field name: {field!r}")
+                if not isinstance(value, str):
+                    raise TypeError(
+                        f"Filter value for {field!r} must be a string, got {type(value).__name__}"
+                    )
                 escaped = _escape_search_value(value)
                 filter_parts.append(f"@{field}:({escaped})")
             pre_filter = " ".join(filter_parts)
@@ -255,9 +259,10 @@ class ValkeyVectorKnowledgeStore(KnowledgeStore):
             return []
 
         documents = []
+        key_prefix = f"{self.prefix}{collection}:"
         for doc_id_raw, fields in raw[1].items():
             doc_id_str = _decode(doc_id_raw)
-            bare_id = doc_id_str.split(":")[-1]
+            bare_id = doc_id_str.removeprefix(key_prefix)
 
             field_map: Dict[str, str] = {}
             for fname, fval in fields.items():

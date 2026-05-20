@@ -10,7 +10,6 @@ Heavy implementations that follow StorageBackendProtocol for:
 
 These implementations are kept in the wrapper to avoid bloating the core SDK.
 """
-import os
 
 # Lazy imports - only import when needed
 __all__ = [
@@ -53,6 +52,7 @@ def __getattr__(name: str):
 
 def _make_valkey_backend_class():
     """Return ValkeyBackend — ValkeyStorageAdapter pre-configured from env vars."""
+    import os
     from .valkey_adapter import ValkeyStorageAdapter
 
     class ValkeyBackend(ValkeyStorageAdapter):

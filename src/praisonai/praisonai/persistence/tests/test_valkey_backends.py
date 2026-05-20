@@ -84,8 +84,9 @@ class TestValkeyVectorKnowledgeStore:
 
     def test_delete_collection(self):
         """Test delete_collection calls ft.dropindex and returns True on success."""
-        store, _ = _make_knowledge_store()
+        store, mock_client = _make_knowledge_store()
         mock_ft = self._mock_ft(dropindex=b"OK")
+        mock_client.scan.return_value = [b"0", []]
 
         with patch(self._FT_MODULE, mock_ft):
             result = store.delete_collection("docs")

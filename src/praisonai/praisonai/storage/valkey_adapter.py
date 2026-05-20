@@ -96,7 +96,7 @@ class ValkeyStorageAdapter:
             result = client.scan(cursor, match=pattern, count=100)
             cursor = result[0]
             all_keys.extend(result[1] or [])
-            if not cursor or (cursor.decode() if isinstance(cursor, bytes) else str(cursor)) == "0":
+            if not cursor or cursor in (b"0", "0", 0):
                 break
         return all_keys
 
@@ -311,9 +311,11 @@ class ValkeySearchBackend:
             return []
 
         results = []
+        key_prefix = f"{self.index_name}:"
         for doc_id, fields in raw[1].items():
             doc: Dict[str, Any] = {}
-            doc["id"] = doc_id.decode('utf-8') if isinstance(doc_id, bytes) else doc_id
+            raw_id = doc_id.decode('utf-8') if isinstance(doc_id, bytes) else doc_id
+            doc["id"] = raw_id.removeprefix(key_prefix)
             for fname, fval in fields.items():
                 fname = fname.decode('utf-8') if isinstance(fname, bytes) else fname
                 fval = fval.decode('utf-8') if isinstance(fval, bytes) else fval

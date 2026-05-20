@@ -6,6 +6,8 @@ ValkeyVectorKnowledgeStore, and ValkeyStorageAdapter all use the
 same connection logic.
 """
 
+from typing import Optional
+
 try:
     from glide_sync import (
         GlideClient as GlideClientSync,
@@ -23,7 +25,12 @@ _MISSING_MSG = (
 )
 
 
-def create_valkey_client(host="localhost", port=6379, password=None, db=0):
+def create_valkey_client(
+    host: str = "localhost",
+    port: int = 6379,
+    password: Optional[str] = None,
+    db: int = 0,
+):
     """Create and return a GlideClientSync instance."""
     if GlideClientSync is None:
         raise ImportError(_MISSING_MSG)

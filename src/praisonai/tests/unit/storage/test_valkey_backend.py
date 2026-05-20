@@ -243,7 +243,7 @@ class TestValkeySearchBackend:
 
         assert isinstance(results, list)
         assert len(results) == 1
-        assert results[0]["id"] == "praisonai_vectors:doc1"
+        assert results[0]["id"] == "doc1"
         assert results[0]["text"] == "hello world"
         mock_ft.search.assert_called_once()
 
